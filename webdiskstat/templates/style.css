@@ -290,41 +290,7 @@ kbd {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.report-security {
-  min-height: 22px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-2) 78%, black 22%);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1;
-  white-space: nowrap;
-}
-.report-security.encrypted {
-  border-color: color-mix(in srgb, var(--accent-2) 60%, var(--line));
-  background: color-mix(in srgb, var(--accent-2) 14%, transparent);
-  color: #99f6e4;
-}
-.report-security.plain {
-  border-color: color-mix(in srgb, var(--warn) 50%, var(--line));
-  background: color-mix(in srgb, var(--warn) 10%, transparent);
-  color: #fbbf24;
-}
-.security-icon {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
+
 .tools {
   display: flex;
   align-items: center;
@@ -1419,14 +1385,7 @@ html[data-theme="light"] .shortcut-list div {
 html[data-theme="light"] .footer {
   background: #f8fafc;
 }
-html[data-theme="light"] .report-security.encrypted {
-  color: #0f766e;
-  background: #ccfbf1;
-}
-html[data-theme="light"] .report-security.plain {
-  color: #92400e;
-  background: #fef3c7;
-}
+
 @media (max-width: 820px) {
   body { overflow: auto; }
   .app { min-height: 100vh; height: auto; }

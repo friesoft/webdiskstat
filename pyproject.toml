@@ -22,8 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-webdiskstat = "webdiskstat.cli:main"
-webdiskstat-server = "webdiskstat.server:main"
+webdiskstat = "webdiskstat.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

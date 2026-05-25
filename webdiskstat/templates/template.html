@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{TITLE}}</title>
-<link rel="icon" type="image/svg+xml" href="{{FAVICON}}">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CjxyZWN0IHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgcng9IjE0IiBmaWxsPSIjMTExODI3Ii8+CjxwYXRoIGQ9Ik0xNSAxMmgzNGw3IDE3djIwYTcgNyAwIDAgMS03IDdIMTVhNyA3IDAgMCAxLTctN1YyOWw3LTE3WiIgZmlsbD0iIzIwMjUyYyIgc3Ryb2tlPSIjN2JkN2ZmIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPHBhdGggZD0iTTkgMjloNDYiIHN0cm9rZT0iIzQ3NTU2OSIgc3Ryb2tlLXdpZHRoPSIzIi8+CjxyZWN0IHg9IjE4IiB5PSIxOCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjUiIHJ4PSIyLjUiIGZpbGw9IiM2NDc0OGIiLz4KPGNpcmNsZSBjeD0iNDgiIGN5PSIyMC41IiByPSIyLjUiIGZpbGw9IiM2NWU0YzQiLz4KPHJlY3QgeD0iMTUiIHk9IjM1IiB3aWR0aD0iMTYiIGhlaWdodD0iMTMiIHJ4PSIzIiBmaWxsPSIjNjVlNGM0Ii8+CjxyZWN0IHg9IjM0IiB5PSMzNSIgd2lkdGg9IjkiIGhlaWdodD0iMTMiIHJ4PSIzIiBmaWxsPSIjMzhiZGY4Ii8+CjxyZWN0IHg9IjQ2IiB5PSMzNSIgd2lkdGg9IjciIGhlaWdodD0iMTMiIHJ4PSIzIiBmaWxsPSIjZjU5ZTBiIi8+CjxyZWN0IHg9IjE1IiB5PSI1MSIgd2lkdGg9IjM4IiBoZWlnaHQ9IjIiIHJ4PSIxIiBmaWxsPSIjMGYxNzJhIiBvcGFjaXR5PSIuODUiLz4KPC9zdmc+">
 <script>
 try {
   document.documentElement.dataset.theme = localStorage.getItem("webdiskstat-theme") === "light" ? "light" : "dark";
@@ -98,7 +98,6 @@ try {
     </section>
   </main>
   <footer class="footer">
-    {{FOOTER_STATUS}}
     <span id="scanSchedulingInfo" class="footer-scheduling" hidden>
       <span class="scheduling-label">Last scan:</span>
       <span id="lastScanTime" class="scheduling-value">-</span>
@@ -107,7 +106,6 @@ try {
       <span id="nextScanTime" class="scheduling-value">-</span>
     </span>
     <span class="footer-meta">
-      <span class="report-size" title="Final generated HTML file size">__WEBDISKSTAT_REPORT_SIZE__</span>
       <time class="generated" datetime="{{GENERATED_ISO}}">Generated {{GENERATED_DISPLAY}}</time>
     </span>
   </footer>
