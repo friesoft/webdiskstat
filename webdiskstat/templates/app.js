@@ -1905,6 +1905,14 @@ async function initRescanUI() {
   }
 }
 
+async function fetchReportPayload() {
+  const response = await fetch("/api/report");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch report data: ${response.statusText}`);
+  }
+  return await response.json();
+}
+
 async function initReport() {
   setTheme(document.documentElement.dataset.theme, false);
   state.treemapTileCap = readStoredTreemapTileCap();
@@ -1914,7 +1922,8 @@ async function initReport() {
   syncMainPaneSize();
 
   try {
-    const root = await loadReportData(REPORT_DATA_PAYLOAD);
+    const payload = await fetchReportPayload();
+    const root = await loadReportData(payload);
     prepareReportData(root);
     const initialNode = nodeFromLocationHash();
     if (initialNode) {

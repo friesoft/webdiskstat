@@ -29,7 +29,7 @@ VOLUME ["/app/reports"]
 # Environment variables with sensible defaults
 ENV PORT=8080
 ENV SCAN_DIR=/scan
-ENV OUTPUT=/app/reports/index.html
+ENV OUTPUT=/app/reports/report.json
 ENV SCAN_INTERVAL=86400
 ENV FORCE_INITIAL_SCAN=false
 ENV GDU_IGNORE_DIRS=""

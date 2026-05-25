@@ -397,41 +397,8 @@ def compressed_script_json_bytes(value: Any) -> bytes:
     return gzip.compress(raw, compresslevel=9, mtime=0)
 
 
-def report_data_payload(root: dict[str, Any]) -> str:
+def report_data_payload(root: dict[str, Any]) -> dict[str, Any]:
     compressed = compressed_script_json_bytes(serialize_report_data(root))
-    return script_json({
+    return {
         "payload": base64.b64encode(compressed).decode("ascii"),
-    })
-
-
-def render_report(root: dict[str, Any]) -> str:
-    """Generates the self-contained HTML report with substituted assets."""
-    data = report_data_payload(root)
-    generated_at = datetime.now().astimezone()
-    generated_iso = generated_at.isoformat(timespec="seconds")
-    generated_display = generated_at.strftime("%Y-%m-%d %H:%M:%S %Z")
-    escaped_title = html.escape(f"{APP_TITLE} - Generated {generated_display}")
-
-    # Load template assets using importlib.resources with local filesystem fallback
-    try:
-        from importlib import resources
-        template_content = resources.files("webdiskstat.templates").joinpath("template.html").read_text(encoding="utf-8")
-        css_content = resources.files("webdiskstat.templates").joinpath("style.css").read_text(encoding="utf-8")
-        js_content = resources.files("webdiskstat.templates").joinpath("app.js").read_text(encoding="utf-8")
-    except Exception:
-        # Fallback to local files for direct checkouts/in-tree runs
-        template_dir = Path(__file__).parent / "templates"
-        template_content = (template_dir / "template.html").read_text(encoding="utf-8")
-        css_content = (template_dir / "style.css").read_text(encoding="utf-8")
-        js_content = (template_dir / "app.js").read_text(encoding="utf-8")
-
-    # Substitute values
-    report = template_content
-    report = report.replace("{{TITLE}}", escaped_title)
-    report = report.replace("{{CSS}}", css_content)
-    report = report.replace("{{GENERATED_ISO}}", html.escape(generated_iso))
-    report = report.replace("{{GENERATED_DISPLAY}}", html.escape(generated_display))
-    report = report.replace("{{DATA}}", data)
-    report = report.replace("{{JS}}", js_content)
-
-    return report
+    }

@@ -17,6 +17,16 @@ app = FastAPI(
     description="Dynamic backend API and report server for webdiskstat"
 )
 
+# Mount templates as static directory
+from fastapi.staticfiles import StaticFiles
+try:
+    from importlib import resources
+    static_path = resources.files("webdiskstat").joinpath("templates")
+except Exception:
+    static_path = Path(__file__).parent / "templates"
+
+app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+
 # Global State
 scan_lock = asyncio.Lock()
 is_scanning = False
@@ -71,15 +81,16 @@ async def run_scan(force: bool = False) -> bool:
             import json
             raw_data = json.loads(stdout)
             
-            print("[Server] Compiling report HTML in-process...", file=sys.stderr)
-            from webdiskstat.compiler import normalize_export, render_report
+            print("[Server] Serializing report data in-process...", file=sys.stderr)
+            from webdiskstat.compiler import normalize_export, report_data_payload
             root = normalize_export(raw_data)
-            html_report = render_report(root)
+            payload = report_data_payload(root)
             
             # Write to output file
             output_path = Path(server_args.output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(html_report, encoding="utf-8")
+            import json
+            output_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
             
             elapsed = time.time() - start_time
             last_scan_completed_time = time.time()
@@ -148,31 +159,42 @@ async def trigger_rescan(background_tasks: BackgroundTasks):
 @app.get("/", response_class=HTMLResponse)
 @app.get("/index.html", response_class=HTMLResponse)
 async def serve_report():
-    """Serves the generated HTML report file with strict cache controls."""
+    """Serves the decoupled static HTML skeleton directly."""
+    try:
+        from importlib import resources
+        html_content = resources.files("webdiskstat.templates").joinpath("template.html").read_text(encoding="utf-8")
+    except Exception:
+        template_dir = Path(__file__).parent / "templates"
+        html_content = (template_dir / "template.html").read_text(encoding="utf-8")
+        
+    return HTMLResponse(
+        content=html_content,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
+        }
+    )
+
+@app.get("/api/report")
+async def get_report():
+    """Returns the generated report JSON structure."""
     output_path = Path(server_args.output)
     if not output_path.exists():
-        return PlainTextResponse(
-            content="HTML report not generated yet. Please wait...",
-            status_code=503
+        raise HTTPException(
+            status_code=503,
+            detail="Scan report data has not been generated yet. Please wait..."
         )
-        
     try:
-        html_content = output_path.read_text(encoding="utf-8")
-        return HTMLResponse(
-            content=html_content,
-            headers={
-                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
-            }
-        )
+        import json
+        return json.loads(output_path.read_text(encoding="utf-8"))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to serve report: {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to read report data: {exc}")
 
 def main():
     global server_args
     parser = argparse.ArgumentParser(description="webdiskstat - Asynchronous Web Server Daemon")
     parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8080")), help="Web server port (default: 8080)")
     parser.add_argument("--scan-dir", default=os.getenv("SCAN_DIR", "/scan"), help="Directory to analyze (default: /scan)")
-    parser.add_argument("--output", default=os.getenv("OUTPUT", "reports/index.html"), help="HTML report output path (default: reports/index.html)")
+    parser.add_argument("--output", default=os.getenv("OUTPUT", "reports/report.json"), help="JSON report output path (default: reports/report.json)")
     parser.add_argument("--scan-interval", type=int, default=int(os.getenv("SCAN_INTERVAL", "86400")), help="Periodic scan interval in seconds (default: 86400)")
     parser.add_argument("--force-initial-scan", type=lambda x: (str(x).lower() == 'true'), default=(os.getenv("FORCE_INITIAL_SCAN", "false").lower() == 'true'), help="Force scan on startup")
     parser.add_argument("--gdu-ignore-dirs", default=os.getenv("GDU_IGNORE_DIRS", ""), help="Comma separated subdirectory exclusions")
