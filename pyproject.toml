@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "webdiskstat"
+version = "1.0.0"
+description = "Convert JSON from gdu or ncdu into a self-contained WinDirStat-like HTML report"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities"
+]
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.22.0",
+]
+
+[project.scripts]
+webdiskstat = "webdiskstat.cli:main"
+webdiskstat-server = "webdiskstat.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["webdiskstat*"]
+
+[tool.setuptools.package-data]
+"webdiskstat.templates" = ["*.html", "*.css", "*.js"]

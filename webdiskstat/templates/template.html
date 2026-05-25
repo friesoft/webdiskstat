@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<link rel="icon" type="image/svg+xml" href="{{FAVICON}}">
+<script>
+try {
+  document.documentElement.dataset.theme = localStorage.getItem("webdiskstat-theme") === "light" ? "light" : "dark";
+} catch (error) {
+  document.documentElement.dataset.theme = "dark";
+}
+</script>
+<style>
+{{CSS}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="toolbar">
+    <nav id="crumbs" class="crumbs" aria-label="Path"></nav>
+    <div class="search" role="search">
+      <button id="searchShortcut" class="search-shortcut" type="button" title="Focus search (/)" aria-label="Focus search with slash shortcut">/</button>
+      <input id="searchInput" class="search-input" type="search" placeholder="Search files and folders" autocomplete="off" aria-label="Search files and folders" aria-controls="searchResults" aria-expanded="false">
+      <div id="searchResults" class="search-results" role="listbox" aria-label="Search results" hidden></div>
+    </div>
+    <div class="tools">
+      <label class="theme-toggle" title="Toggle light theme">
+        <input id="themeToggle" class="theme-input" type="checkbox" role="switch" aria-label="Light theme">
+        <span class="theme-switch" aria-hidden="true">
+          <svg class="theme-icon moon-icon" viewBox="0 0 24 24"><path d="M20 14.7A7.5 7.5 0 0 1 9.3 4a8 8 0 1 0 10.7 10.7Z"/></svg>
+          <svg class="theme-icon sun-icon" viewBox="0 0 24 24"><path d="M12 3v2"/><path d="M12 19v2"/><path d="m4.22 4.22 1.42 1.42"/><path d="m18.36 18.36 1.42 1.42"/><path d="M3 12h2"/><path d="M19 12h2"/><path d="m4.22 19.78 1.42-1.42"/><path d="m18.36 5.64 1.42-1.42"/><circle cx="12" cy="12" r="4"/></svg>
+          <span class="theme-knob"></span>
+        </span>
+      </label>
+      <button id="rescanButton" class="icon-btn" title="Trigger manual rescan" aria-label="Rescan">
+        <svg class="icon rescan-icon" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+          <path d="M21 3v5h-5"/>
+          <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+          <path d="M3 21v-5h5"/>
+        </svg>
+      </button>
+      <button id="helpButton" class="icon-btn" title="Help (?)" aria-label="Help">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.8 2.8 0 0 1 5 1.7c0 2-2.5 2.2-2.5 4.3"/><path d="M12 18h.01"/></svg>
+      </button>
+    </div>
+  </header>
+  <main id="main" class="main">
+    <aside id="sidebar" class="sidebar">
+      <section class="summary">
+        <div class="metric"><span class="label">Selected</span><span id="selectedSize" class="value"></span></div>
+        <div class="metric"><span class="label">Items</span><span id="selectedItems" class="value"></span></div>
+        <div class="metric"><span class="label">Files</span><span id="selectedFiles" class="value"></span></div>
+      </section>
+      <section id="tree" class="tree" aria-label="Directory listing"></section>
+    </aside>
+    <div id="mainResizer" class="main-resizer" role="separator" aria-orientation="vertical" aria-label="Resize right panel" tabindex="0"></div>
+    <section id="content" class="content">
+      <div id="treemapFrame" class="treemap-frame">
+        <div class="treemap-head">
+          <label class="treemap-cap-label" for="treemapTileCap">Max Tiles Depth</label>
+          <select id="treemapTileCap" class="treemap-cap-select" aria-label="Maximum treemap tiles depth">
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <section id="treemap" class="treemap" aria-label="Treemap"></section>
+      </div>
+      <div id="homeResizer" class="home-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize home panes" tabindex="0" hidden></div>
+      <section id="topFiles" class="top-files" aria-label="Biggest files" hidden>
+        <div class="top-files-head">
+          <span id="topFilesTitle" class="top-file-title">List of biggest file</span>
+          <div class="top-file-controls">
+            <select id="topFilesLimit" class="top-file-limit" aria-label="Number of biggest files">
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="30">30</option>
+              <option value="40">40</option>
+              <option value="50">50</option>
+            </select>
+          </div>
+          <span class="top-file-size">Size</span>
+        </div>
+        <div id="topFilesBody" class="top-files-body"></div>
+      </section>
+      <section id="details" class="details">
+        <div class="detail-main">
+          <div id="detailName" class="detail-name"></div>
+          <div id="detailPath" class="detail-path"></div>
+        </div>
+        <div id="detailStats" class="detail-stats"></div>
+      </section>
+    </section>
+  </main>
+  <footer class="footer">
+    {{FOOTER_STATUS}}
+    <span id="scanSchedulingInfo" class="footer-scheduling" hidden>
+      <span class="scheduling-label">Last scan:</span>
+      <span id="lastScanTime" class="scheduling-value">-</span>
+      <span class="scheduling-sep">·</span>
+      <span class="scheduling-label">Next scan:</span>
+      <span id="nextScanTime" class="scheduling-value">-</span>
+    </span>
+    <span class="footer-meta">
+      <span class="report-size" title="Final generated HTML file size">__WEBDISKSTAT_REPORT_SIZE__</span>
+      <time class="generated" datetime="{{GENERATED_ISO}}">Generated {{GENERATED_DISPLAY}}</time>
+    </span>
+  </footer>
+</div>
+<section id="helpPage" class="help-page" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
+  <div class="help-dialog">
+    <header class="help-head">
+      <h2 id="helpTitle" class="help-title">Help</h2>
+      <button id="helpCloseButton" class="icon-btn" title="Close help" aria-label="Close help">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </header>
+    <div class="help-content">
+      <div class="help-grid">
+        <section class="help-section">
+          <h3>What This Report Shows</h3>
+          <p>webdiskstat turns a <code>gdu</code> or <code>ncdu</code> scan into a static disk usage report. The left panel lists entries in the current directory. The treemap shows the same directory visually by size, including nested contents inside larger directory tiles when space allows.</p>
+        </section>
+        <section class="help-section">
+          <h3>Directory List</h3>
+          <ul>
+            <li>Double-click a directory to enter it.</li>
+            <li>Use the column headers to sort by name, items, files, size, or modified date.</li>
+            <li>Use the column settings button next to the Name header to show or hide optional columns.</li>
+          </ul>
+        </section>
+        <section class="help-section">
+          <h3>Treemap</h3>
+          <ul>
+            <li>Larger directory tiles show subdirectories and files inside them when space allows.</li>
+            <li>Directories show up to the selected Max Tiles Depth entries before grouping additional entries as smaller entries.</li>
+            <li>Double-click a directory tile to enter it.</li>
+          </ul>
+        </section>
+        <section class="help-section">
+          <h3>Home View</h3>
+          <ul>
+            <li>Choose 10 to 50 biggest files from the list menu.</li>
+            <li>Drag the divider between the treemap and biggest-files list to resize the home panes.</li>
+            <li>Double-click a listed file to jump to the directory containing it.</li>
+          </ul>
+        </section>
+        <section class="help-section">
+          <h3>Navigation</h3>
+          <ul>
+            <li>Use the breadcrumb path at the top to jump to a parent directory.</li>
+            <li>Use the search box to jump directly to files or directories anywhere in the report.</li>
+            <li>Drag the divider between the directory list and right panel to resize the right panel.</li>
+            <li>Use the parent button next to the Name column header to go up one directory.</li>
+          </ul>
+        </section>
+        <section class="help-section">
+          <h3>Keyboard</h3>
+          <div class="shortcut-list">
+            <div><span><kbd>Up</kbd> / <kbd>Down</kbd></span><span>Move selection in the list.</span></div>
+            <div><span><kbd>Page Up</kbd> / <kbd>Page Down</kbd></span><span>Move selection by one visible page.</span></div>
+            <div><span><kbd>Home</kbd> / <kbd>End</kbd></span><span>Jump to the first or last item.</span></div>
+            <div><span><kbd>/</kbd> / <kbd>Ctrl</kbd>+<kbd>F</kbd></span><span>Focus global search.</span></div>
+            <div><span><kbd>n</kbd> / <kbd>s</kbd> / <kbd>C</kbd> / <kbd>M</kbd>/<kbd>m</kbd></span><span>Sort by name, size, file count, or modified time.</span></div>
+            <div><span><kbd>Enter</kbd> / <kbd>Right</kbd></span><span>Enter the selected directory.</span></div>
+            <div><span><kbd>Backspace</kbd> / <kbd>Left</kbd></span><span>Go up one directory.</span></div>
+            <div><span><kbd>?</kbd></span><span>Open this help page.</span></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</section>
+<div id="tooltip" class="tooltip"></div>
+<script>
+const REPORT_DATA_PAYLOAD = {{DATA}};
+{{JS}}
+</script>
+</body>
+</html>
