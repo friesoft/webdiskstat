@@ -80,6 +80,50 @@ Read a compressed scanner export:
 ./webdiskstat.py report.json.gz -o diskstats.html
 ```
 
+## Docker Deployment
+
+You can run `webdiskstat` as a lightweight, containerized service that periodically scans your mounted directories and serves the disk usage dashboard.
+
+### Docker Compose (Recommended)
+
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  webdiskstat:
+    image: <your-dockerhub-username>/webdiskstat:latest
+    container_name: webdiskstat
+    restart: unless-stopped
+    ports:
+      - "18090:80"
+    volumes:
+      # Map the directories you want to scan inside /scan (read-only recommended)
+      - /path/to/analyze:/scan/data:ro
+    environment:
+      - SCAN_INTERVAL=86400  # Scan every 24 hours (in seconds)
+      - FORCE_INITIAL_SCAN=false  # Skip initial scan on startup if index.html exists
+      - GDU_IGNORE_DIRS=data/temp,data/cache  # Comma-separated subpaths to ignore
+```
+
+Start the container:
+
+```sh
+docker compose up -d
+```
+
+### Docker Run
+
+Run the container directly using `docker` or `podman`:
+
+```sh
+docker run -d \
+  --name webdiskstat \
+  -p 18090:80 \
+  -e SCAN_INTERVAL=60 \
+  -v /path/to/analyze:/scan:ro \
+  <your-dockerhub-username>/webdiskstat:latest
+```
+
 ## Example
 
 Open the included sample report in the repository: [example/report.html](example/report.html).
@@ -152,3 +196,23 @@ The output is a static browser disk usage report. After generation, it does not 
 - Reports use the browser Web Crypto API when available and include a slower JavaScript fallback for `file://` and other non-HTTPS schemes.
 - Unencrypted reports disclose the scan metadata embedded in the HTML.
 - Encrypted reports still depend on password strength, and command-line passwords may be visible in shell history or process lists.
+
+## Development
+
+### Building the Container Image
+
+To build the Docker image locally from the source files using `docker` or `podman`:
+
+```sh
+# Using Docker
+docker build -t webdiskstat:latest .
+
+# Using Podman
+podman build -t webdiskstat:latest .
+```
+
+You can then run your locally built image:
+
+```sh
+podman run -d --name webdiskstat -p 18090:80 -e SCAN_INTERVAL=60 -v $(pwd):/scan:ro webdiskstat:latest
+```
