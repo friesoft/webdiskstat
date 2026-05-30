@@ -1615,6 +1615,12 @@ function renderDetails() {
   el.selectedItems.textContent = formatCount(state.current.items);
   el.selectedFiles.textContent = formatCount(state.current.files);
   el.detailName.textContent = node.name;
+  
+  const dirBtn = document.getElementById("rescanDirButton");
+  if (dirBtn) {
+    dirBtn.hidden = node.type !== "dir";
+  }
+  
   el.detailPath.textContent = node.path || node.name;
   el.detailStats.textContent = "";
   const stats = [
@@ -1845,7 +1851,23 @@ async function checkRescanStatus() {
     } else {
       if (isRescanning) {
         setRescanningState(false);
-        window.location.reload();
+        try {
+          const payload = await fetchReportPayload();
+          const root = await loadReportData(payload);
+          
+          const currentPath = state.current ? state.current.path : null;
+          const selectedPath = state.selected ? state.selected.path : null;
+          
+          prepareReportData(root);
+          
+          if (currentPath && byPath.has(currentPath)) state.current = byPath.get(currentPath);
+          if (selectedPath && byPath.has(selectedPath)) state.selected = byPath.get(selectedPath);
+          
+          renderSafely();
+        } catch (err) {
+          console.error("Failed to dynamically reload report:", err);
+          window.location.reload();
+        }
         return;
       }
       setRescanningState(false);
@@ -1860,11 +1882,12 @@ async function checkRescanStatus() {
   }
 }
 
-async function triggerRescan() {
+async function triggerRescan(path = null) {
   if (isRescanning) return;
   setRescanningState(true);
   try {
-    const response = await fetch("/api/rescan", { method: "POST" });
+    const url = path ? `/api/rescan?path=${encodeURIComponent(path)}` : "/api/rescan";
+    const response = await fetch(url, { method: "POST" });
     if (response.status === 202) {
       setTimeout(checkRescanStatus, 1000);
     } else if (response.status === 499 || response.status === 409) {
@@ -1882,31 +1905,42 @@ async function triggerRescan() {
 
 function setRescanningState(active) {
   isRescanning = active;
-  const btn = document.getElementById("rescanButton");
-  if (!btn) return;
-  btn.disabled = active;
-  btn.classList.toggle("spinning", active);
-  btn.title = active ? "Scanning in progress..." : "Trigger manual rescan";
+  [document.getElementById("rescanButton"), document.getElementById("rescanDirButton")].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = active;
+    btn.classList.toggle("spinning", active);
+    btn.title = active ? "Scanning in progress..." : (btn.id === "rescanDirButton" ? "Rescan this directory" : "Trigger manual rescan");
+  });
 }
 
 async function initRescanUI() {
   const btn = document.getElementById("rescanButton");
+  const dirBtn = document.getElementById("rescanDirButton");
   if (!btn) return;
   try {
     const response = await fetch("/api/status");
     if (response.ok) {
-      btn.addEventListener("click", triggerRescan);
+      btn.addEventListener("click", () => {
+        if (state.current) triggerRescan(state.current.path || state.current.name);
+        else triggerRescan();
+      });
+      if (dirBtn) dirBtn.addEventListener("click", () => {
+        const target = state.current;
+        if (target) triggerRescan(target.path || target.name);
+      });
       checkRescanStatus();
     } else {
       btn.remove();
+      if (dirBtn) dirBtn.remove();
     }
   } catch (e) {
     btn.remove();
+    if (dirBtn) dirBtn.remove();
   }
 }
 
 async function fetchReportPayload() {
-  const response = await fetch("/api/report");
+  const response = await fetch("/api/report?_t=" + Date.now());
   if (!response.ok) {
     throw new Error(`Failed to fetch report data: ${response.statusText}`);
   }

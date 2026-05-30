@@ -402,3 +402,58 @@ def report_data_payload(root: dict[str, Any]) -> dict[str, Any]:
     return {
         "payload": base64.b64encode(compressed).decode("ascii"),
     }
+
+def deserialize_report_payload(payload_b64: str) -> dict[str, Any]:
+    """Decodes and decompresses the base64 gzipped report payload back into a node tree."""
+    raw_json = gzip.decompress(base64.b64decode(payload_b64)).decode("utf-8")
+    data = json.loads(raw_json)
+    strings = data[0]
+    packed_root = data[1]
+
+    def value_at(index: int) -> str:
+        return strings[index] if index >= 0 else ""
+
+    def unpack(packed: list[Any], parent_path: str) -> dict[str, Any]:
+        name = value_at(packed[0])
+        expected_path = make_path(parent_path, name)
+        path = value_at(packed[1]) if packed[1] >= 0 else expected_path
+        node_type = "dir" if packed[3] else "file"
+        node = {
+            "name": name,
+            "path": path,
+            "size": packed[2] or 0,
+            "type": node_type,
+            "ext": value_at(packed[4]) or ("" if node_type == "dir" else "[no extension]"),
+            "children": [],
+        }
+        mtime = value_at(packed[5])
+        mime = value_at(packed[6])
+        flag = value_at(packed[7])
+        if mtime: node["mtime"] = mtime
+        if mime: node["mime"] = mime
+        if flag: node["flag"] = flag
+        node["children"] = [unpack(child, path) for child in packed[8]]
+        return node
+
+    return unpack(packed_root, "")
+
+def find_and_replace_subtree(current_node: dict[str, Any], target_path: str, new_node: dict[str, Any]) -> tuple[bool, int]:
+    """Recursively finds target_path and replaces it with new_node, returning (found, delta_size)."""
+    for i, child in enumerate(current_node.get("children", [])):
+        if child.get("path") == target_path:
+            old_size = child.get("size", 0)
+            new_node["name"] = child.get("name", new_node.get("name"))
+            current_node["children"][i] = new_node
+            delta = new_node.get("size", 0) - old_size
+            current_node["size"] = current_node.get("size", 0) + delta
+            # Re-sort children
+            current_node["children"].sort(key=lambda x: x.get("size", 0), reverse=True)
+            return True, delta
+        
+        found, delta = find_and_replace_subtree(child, target_path, new_node)
+        if found:
+            current_node["size"] = current_node.get("size", 0) + delta
+            current_node["children"].sort(key=lambda x: x.get("size", 0), reverse=True)
+            return True, delta
+            
+    return False, 0

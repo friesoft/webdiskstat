@@ -1455,3 +1455,16 @@ html[data-theme="light"] .footer {
 .icon-btn.spinning .icon {
   animation: spin 1.5s linear infinite;
 }
+.detail-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.crumbs-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}

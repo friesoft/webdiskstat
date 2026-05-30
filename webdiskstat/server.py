@@ -35,7 +35,7 @@ last_scan_completed_time: Optional[float] = None
 next_scan_scheduled_time: Optional[float] = None
 server_args = None
 
-async def run_scan(force: bool = False) -> bool:
+async def run_scan(force: bool = False, sub_path: Optional[str] = None) -> bool:
     """
     Executes GDU or NCDU, captures raw JSON output, and compiles the
     interactive HTML report in-process in Python.
@@ -51,14 +51,40 @@ async def run_scan(force: bool = False) -> bool:
         is_scanning = True
         last_scan_error = None
         start_time = time.time()
-        print(f"[Server] [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting disk scan...", file=sys.stderr)
+        
+        cached_root = None
+        output_path = Path(server_args.output)
+        if sub_path and output_path.exists():
+            try:
+                import json
+                from webdiskstat.compiler import deserialize_report_payload
+                payload_data = json.loads(output_path.read_text(encoding="utf-8"))
+                cached_root = deserialize_report_payload(payload_data.get("payload", ""))
+            except Exception as exc:
+                print(f"[Server] Failed to deserialize cached tree: {exc}", file=sys.stderr)
+                pass
+
+        if cached_root is None and sub_path:
+            print(f"[Server] Cache unavailable, falling back to full scan instead of subscan for {sub_path}", file=sys.stderr)
+            sub_path = None
+            
+        scan_msg = f"Starting disk scan for {sub_path}..." if sub_path else "Starting disk scan..."
+        print(f"[Server] [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {scan_msg}", file=sys.stderr)
         
         try:
             # Build GDU command
             gdu_cmd = ["gdu"]
             if server_args.gdu_ignore_dirs:
                 gdu_cmd.extend(["-i", server_args.gdu_ignore_dirs])
-            gdu_cmd.extend(["-o-", server_args.scan_dir])
+                
+            target_path = server_args.scan_dir
+            if sub_path:
+                if sub_path.startswith(server_args.scan_dir):
+                    target_path = sub_path
+                else:
+                    target_path = os.path.join(server_args.scan_dir, sub_path.lstrip("/"))
+                
+            gdu_cmd.extend(["-o-", target_path])
             
             print(f"[Server] Spawning scanner process: {' '.join(gdu_cmd)}", file=sys.stderr)
             
@@ -83,11 +109,26 @@ async def run_scan(force: bool = False) -> bool:
             
             print("[Server] Serializing report data in-process...", file=sys.stderr)
             from webdiskstat.compiler import normalize_export, report_data_payload
-            root = normalize_export(raw_data)
+            
+            if sub_path and cached_root is not None:
+                if sub_path.rstrip("/") == server_args.scan_dir.rstrip("/"):
+                    root = normalize_export(raw_data)
+                else:
+                    sub_root = normalize_export(raw_data)
+                    from webdiskstat.compiler import find_and_replace_subtree, add_totals
+                    found, delta = find_and_replace_subtree(cached_root, sub_path, sub_root)
+                    if not found:
+                        print(f"[Server] Warning: sub_path {sub_path} not found in cached tree. Tree not updated.", file=sys.stderr)
+                    else:
+                        print(f"[Server] Replaced sub_tree at {sub_path}, delta size: {delta}", file=sys.stderr)
+                        add_totals(cached_root)
+                    root = cached_root
+            else:
+                root = normalize_export(raw_data)
+                
             payload = report_data_payload(root)
             
             # Write to output file
-            output_path = Path(server_args.output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             import json
             output_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
@@ -148,12 +189,12 @@ async def get_status():
     }
 
 @app.post("/api/rescan", status_code=202)
-async def trigger_rescan(background_tasks: BackgroundTasks):
+async def trigger_rescan(background_tasks: BackgroundTasks, path: Optional[str] = None):
     """Queues a manual rescan task asynchronously if one is not already running."""
     if is_scanning or scan_lock.locked():
         raise HTTPException(status_code=409, detail="Scan already in progress")
         
-    background_tasks.add_task(run_scan, force=True)
+    background_tasks.add_task(run_scan, force=True, sub_path=path)
     return {"status": "scanning", "message": "Manual rescan triggered."}
 
 @app.get("/", response_class=HTMLResponse)
@@ -185,7 +226,11 @@ async def get_report():
         )
     try:
         import json
-        return json.loads(output_path.read_text(encoding="utf-8"))
+        return Response(
+            content=output_path.read_bytes(),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to read report data: {exc}")
 
