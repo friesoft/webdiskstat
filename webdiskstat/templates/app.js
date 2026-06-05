@@ -1966,9 +1966,10 @@ async function initReport() {
       syncUrlToCurrent(initialNode, true);
     }
     renderSafely();
-    initRescanUI();
   } catch (error) {
     showLoadError(error);
+  } finally {
+    initRescanUI();
   }
 }
 
