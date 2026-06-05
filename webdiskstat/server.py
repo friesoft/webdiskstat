@@ -104,34 +104,38 @@ async def run_scan(force: bool = False, sub_path: Optional[str] = None) -> bool:
                 raise RuntimeError(f"Scanner process failed (exit {p.returncode}): {err_msg}")
                 
             print("[Server] Scan complete. Parsing GDU/NCDU JSON structure...", file=sys.stderr)
-            import json
-            raw_data = json.loads(stdout)
+            # Parsing happens in the background thread
             
-            print("[Server] Serializing report data in-process...", file=sys.stderr)
-            from webdiskstat.compiler import normalize_export, report_data_payload
-            
-            if sub_path and cached_root is not None:
-                if sub_path.rstrip("/") == server_args.scan_dir.rstrip("/"):
-                    root = normalize_export(raw_data)
-                else:
-                    sub_root = normalize_export(raw_data)
-                    from webdiskstat.compiler import find_and_replace_subtree, add_totals
-                    found, delta = find_and_replace_subtree(cached_root, sub_path, sub_root)
-                    if not found:
-                        print(f"[Server] Warning: sub_path {sub_path} not found in cached tree. Tree not updated.", file=sys.stderr)
+            def process_gdu_output(stdout_bytes, s_args, spath, c_root, out_path):
+                import json
+                from webdiskstat.compiler import normalize_export, report_data_payload
+                raw_data = json.loads(stdout_bytes.decode("utf-8"))
+                if spath and c_root is not None:
+                    if spath.rstrip("/") == s_args.scan_dir.rstrip("/"):
+                        root_node = normalize_export(raw_data)
                     else:
-                        print(f"[Server] Replaced sub_tree at {sub_path}, delta size: {delta}", file=sys.stderr)
-                        add_totals(cached_root)
-                    root = cached_root
-            else:
-                root = normalize_export(raw_data)
-                
-            payload = report_data_payload(root)
-            
-            # Write to output file
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            import json
-            output_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+                        sub_root = normalize_export(raw_data)
+                        from webdiskstat.compiler import find_and_replace_subtree, add_totals
+                        found, delta = find_and_replace_subtree(c_root, spath, sub_root)
+                        if not found:
+                            print(f"[Server] Warning: sub_path {spath} not found in cached tree. Tree not updated.", file=sys.stderr)
+                        else:
+                            print(f"[Server] Replaced sub_tree at {spath}, delta size: {delta}", file=sys.stderr)
+                            add_totals(c_root)
+                        root_node = c_root
+                else:
+                    root_node = normalize_export(raw_data)
+                    
+                payload = report_data_payload(root_node)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = out_path.with_suffix('.tmp')
+                tmp_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+                tmp_path.replace(out_path)
+                return root_node
+
+            cached_root = await asyncio.to_thread(
+                process_gdu_output, stdout, server_args, sub_path, cached_root, output_path
+            )
             
             elapsed = time.time() - start_time
             last_scan_completed_time = time.time()
@@ -208,6 +212,10 @@ async def serve_report():
         template_dir = Path(__file__).parent / "templates"
         html_content = (template_dir / "template.html").read_text(encoding="utf-8")
         
+    import time
+    html_content = html_content.replace("/static/app.js", f"/static/app.js?v={time.time()}")
+    html_content = html_content.replace("/static/style.css", f"/static/style.css?v={time.time()}")
+
     return HTMLResponse(
         content=html_content,
         headers={

@@ -131,7 +131,6 @@ const byId = new Map();
 const byPath = new Map();
 const parent = new Map();
 const searchIndex = [];
-const searchCandidateIndex = new Map();
 let searchResults = [];
 let searchTimer = 0;
 let nextNodeId = 0;
@@ -180,26 +179,7 @@ function normalizeSearchText(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-function searchTrigrams(value) {
-  const text = normalizeSearchText(value);
-  if (text.length < SEARCH_TRIGRAM_SIZE) return [];
-  const seen = new Set();
-  for (let index = 0; index <= text.length - SEARCH_TRIGRAM_SIZE; index++) {
-    seen.add(text.slice(index, index + SEARCH_TRIGRAM_SIZE));
-  }
-  return Array.from(seen);
-}
-
-function addSearchCandidateIndexEntry(searchText, entryIndex) {
-  searchTrigrams(searchText).forEach(trigram => {
-    let entries = searchCandidateIndex.get(trigram);
-    if (!entries) {
-      entries = [];
-      searchCandidateIndex.set(trigram, entries);
-    }
-    entries.push(entryIndex);
-  });
-}
+// Trigram indexing removed for performance
 
 function addSearchIndexEntry(node) {
   const name = node.name || "";
@@ -213,7 +193,6 @@ function addSearchIndexEntry(node) {
   };
   const entryIndex = searchIndex.length;
   searchIndex.push(entry);
-  addSearchCandidateIndexEntry(entry.searchText, entryIndex);
 }
 
 function walk(node, parentNode, depth = 0) {
@@ -459,39 +438,23 @@ function insertSearchResult(results, candidate, limit) {
   if (results.length > limit) results.pop();
 }
 
-function candidateIndexesForSearchTerms(terms) {
-  let bestCandidates = null;
-  for (let termIndex = 0; termIndex < terms.length; termIndex++) {
-    const term = terms[termIndex];
-    if (term.length < SEARCH_TRIGRAM_SIZE) continue;
-    const trigrams = searchTrigrams(term);
-    for (let trigramIndex = 0; trigramIndex < trigrams.length; trigramIndex++) {
-      const candidates = searchCandidateIndex.get(trigrams[trigramIndex]);
-      if (!candidates) return [];
-      if (!bestCandidates || candidates.length < bestCandidates.length) bestCandidates = candidates;
-    }
-  }
-  return bestCandidates;
-}
+// candidateIndexesForSearchTerms removed for performance
 
 function findSearchMatches(query, limit = SEARCH_RESULT_LIMIT) {
   const normalized = normalizeSearchText(query);
   if (!normalized) return [];
   const terms = normalized.split(/\s+/).filter(Boolean);
   if (!terms.length) return [];
-
+  
   const results = [];
-  const candidateIndexes = candidateIndexesForSearchTerms(terms);
-  const fullScan = candidateIndexes === null;
-  const candidateCount = fullScan ? searchIndex.length : candidateIndexes.length;
-  for (let index = 0; index < candidateCount; index++) {
-    const entry = fullScan ? searchIndex[index] : searchIndex[candidateIndexes[index]];
-    if (!searchEntryMatches(entry, terms)) continue;
-    insertSearchResult(results, {
-      node: entry.node,
-      score: searchScore(entry, terms, normalized)
-    }, limit);
+  
+  for (let index = 0; index < searchIndex.length; index++) {
+    const entry = searchIndex[index];
+    if (searchEntryMatches(entry, terms)) {
+      insertSearchResult(results, { node: entry.node, score: searchScore(entry, terms, normalized) }, limit);
+    }
   }
+  
   return results;
 }
 
@@ -1191,10 +1154,10 @@ function topLevelDirectoryTileRect(rect, node, depth) {
 }
 
 function renderTreemapTile(container, rect, depth, maxItems) {
-  if (rect.w < 1 || rect.h < 1) return;
+  if (rect.w < 4 || rect.h < 4 || depth >= 4) return;
   const node = rect.node;
   const tileRect = topLevelDirectoryTileRect(rect, node, depth);
-  if (tileRect.w < 1 || tileRect.h < 1) return;
+  if (tileRect.w < 4 || tileRect.h < 4) return;
   const childBounds = nestedTreemapBounds(node, tileRect, depth);
   const childItems = childBounds ? treemapItems(node, maxItems) : [];
   const childRects = childItems.length
@@ -1561,9 +1524,13 @@ function renderHomePanel() {
   }
   syncHomePaneSize();
 
-  const files = [];
-  collectFiles(DATA, files);
-  files.sort((a, b) => b.size - a.size);
+  if (!DATA._topFilesCache) {
+    const files = [];
+    collectFiles(DATA, files);
+    files.sort((a, b) => b.size - a.size);
+    DATA._topFilesCache = files.slice(0, 100); // cache up to 100 top files
+  }
+
   state.topFilesLimit = normalizeTopFilesLimit(state.topFilesLimit);
   el.topFilesLimit.value = String(state.topFilesLimit);
   el.topFilesTitle.textContent = "List of biggest file";
@@ -1571,7 +1538,7 @@ function renderHomePanel() {
 
   el.topFilesBody.textContent = "";
   el.topFilesBody.scrollTop = 0;
-  if (!files.length) {
+  if (!DATA._topFilesCache.length) {
     const empty = document.createElement("div");
     empty.className = "top-file-row";
     empty.textContent = "No files";
@@ -1579,7 +1546,7 @@ function renderHomePanel() {
     return;
   }
 
-  const topFiles = files.slice(0, state.topFilesLimit);
+  const topFiles = DATA._topFilesCache.slice(0, state.topFilesLimit);
   topFiles.forEach(file => {
     const row = document.createElement("div");
     row.className = "top-file-row";
@@ -1727,7 +1694,6 @@ function prepareReportData(root) {
   byPath.clear();
   parent.clear();
   searchIndex.length = 0;
-  searchCandidateIndex.clear();
   closeSearchResults();
   nextNodeId = 0;
   DATA = root;
@@ -1832,7 +1798,10 @@ function startSchedulingCountdown(nextScanTimeVal, lastScanTimeVal) {
   schedulingTimer = setInterval(updateCountdown, 1000);
 }
 
+let isCheckingRescan = false;
 async function checkRescanStatus() {
+  if (isCheckingRescan) return;
+  isCheckingRescan = true;
   try {
     const response = await fetch("/api/status");
     if (!response.ok) {
@@ -1879,6 +1848,8 @@ async function checkRescanStatus() {
     setRescanningState(false);
     // Poll again in 10s if we failed to reach the server
     setTimeout(checkRescanStatus, 10000);
+  } finally {
+    isCheckingRescan = false;
   }
 }
 
